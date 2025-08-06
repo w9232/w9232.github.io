@@ -6,6 +6,9 @@
   <title>幸运抓阄 - 多人在线抽签工具</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 引入Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js"></script>
   
   <!-- Tailwind 配置 -->
   <script>
@@ -73,23 +76,40 @@
   </header>
 
   <main class="container mx-auto px-4 py-8 max-w-5xl">
-    <!-- 介绍卡片 -->
+    <!-- 房间设置 -->
     <div class="bg-white rounded-xl shadow-md p-6 mb-8 transform transition-all hover:shadow-lg">
-      <h2 class="text-xl font-semibold mb-2 text-primary">多人在线抓阄工具</h2>
-      <p class="text-gray-600 mb-4">简单公平的随机抽签工具，支持多人同时在线参与，由主持人进行抽签，结果实时同步给所有参与者。</p>
-      <div class="flex flex-wrap gap-3">
-        <div class="flex items-center text-sm text-gray-500">
-          <i class="fa fa-check-circle text-secondary mr-1"></i>
-          <span>公平随机算法</span>
+      <h2 class="text-xl font-semibold mb-4 text-primary">房间设置</h2>
+      <div class="flex flex-wrap gap-4 items-center">
+        <div class="flex-1 min-w-[250px]">
+          <label class="block text-sm font-medium text-gray-700 mb-1">房间ID（共享此ID让他人加入）</label>
+          <div class="flex">
+            <input 
+              type="text" 
+              id="room-id" 
+              placeholder="输入房间ID或留空自动生成" 
+              class="flex-1 px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+            >
+            <button 
+              id="join-room" 
+              class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-r-lg transition-all whitespace-nowrap"
+            >
+              加入/创建房间
+            </button>
+          </div>
         </div>
-        <div class="flex items-center text-sm text-gray-500">
-          <i class="fa fa-check-circle text-secondary mr-1"></i>
-          <span>实时结果同步</span>
+        <div>
+          <button 
+            id="copy-room-id" 
+            class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-all flex items-center"
+            disabled
+          >
+            <i class="fa fa-copy mr-1"></i> 复制房间ID
+          </button>
         </div>
-        <div class="flex items-center text-sm text-gray-500">
-          <i class="fa fa-check-circle text-secondary mr-1"></i>
-          <span>多人在线参与</span>
-        </div>
+      </div>
+      <div id="sync-status" class="mt-3 text-sm text-gray-500 flex items-center">
+        <i class="fa fa-circle-o-notch fa-spin mr-1"></i>
+        <span>未连接到服务器</span>
       </div>
     </div>
 
@@ -108,10 +128,12 @@
               id="participant-name" 
               placeholder="输入参与者姓名" 
               class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+              disabled
             >
             <button 
               id="add-participant" 
               class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-all flex items-center"
+              disabled
             >
               <i class="fa fa-plus mr-1"></i> 添加
             </button>
@@ -137,7 +159,7 @@
           <div id="participants-container" class="max-h-[300px] overflow-y-auto pr-2 space-y-2">
             <div class="text-center text-gray-400 py-8 border border-dashed border-gray-200 rounded-lg">
               <i class="fa fa-users text-3xl mb-2 opacity-30"></i>
-              <p>暂无参与者，请添加</p>
+              <p>请先创建或加入房间</p>
             </div>
           </div>
           
@@ -152,6 +174,7 @@
             <button 
               id="import-names" 
               class="text-gray-500 hover:text-primary text-sm transition-colors flex items-center"
+              disabled
             >
               <i class="fa fa-upload mr-1"></i> 批量导入
             </button>
@@ -172,7 +195,7 @@
             <div id="draw-result" class="mb-8 w-full max-w-md h-40 flex items-center justify-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 transition-all">
               <div class="text-center text-gray-400">
                 <i class="fa fa-trophy text-4xl mb-2 opacity-30"></i>
-                <p>抽签结果将显示在这里</p>
+                <p>请先创建或加入房间</p>
               </div>
             </div>
             
@@ -204,7 +227,7 @@
           
           <div id="history-container" class="max-h-[200px] overflow-y-auto space-y-3">
             <div class="text-center text-gray-400 py-6 border border-dashed border-gray-200 rounded-lg">
-              <p>暂无抽签记录</p>
+              <p>请先创建或加入房间</p>
             </div>
           </div>
         </div>
@@ -219,11 +242,15 @@
           <ul class="space-y-2 text-gray-600 text-sm">
             <li class="flex items-start">
               <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-              <span>主持人添加所有参与抽签的人员名单</span>
+              <span>创建房间并分享房间ID给参与者</span>
             </li>
             <li class="flex items-start">
               <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
-              <span>其他参与者打开同一页面即可同步查看</span>
+              <span>参与者输入相同的房间ID即可加入</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
+              <span>主持人添加所有参与抽签的人员名单</span>
             </li>
             <li class="flex items-start">
               <i class="fa fa-check-circle text-secondary mt-1 mr-2"></i>
@@ -273,18 +300,48 @@
   </footer>
 
   <script>
+    // Firebase 配置 - 请替换为你自己的Firebase配置
+    const firebaseConfig = {
+      apiKey: "AIzaSyCqFbJZxX9tRzX5G7z9QZ5QZ5QZ5QZ5QZ5",
+      authDomain: "draw-tool-example.firebaseapp.com",
+      databaseURL: "https://draw-tool-example-default-rtdb.firebaseio.com",
+      projectId: "draw-tool-example",
+      storageBucket: "draw-tool-example.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:1234567890abcdef"
+    };
+
+    // 初始化Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
     // 全局状态管理
     const state = {
       participants: [],
       history: [],
       isDrawing: false,
       currentWinner: null,
-      // 使用localStorage模拟实时同步
-      syncKey: 'drawToolData'
+      roomId: null,
+      isConnected: false,
+      userId: generateUserId() // 生成唯一用户ID
     };
+
+    // 生成唯一用户ID
+    function generateUserId() {
+      return 'user_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // 生成随机房间ID
+    function generateRoomId() {
+      return Math.random().toString(36).substr(2, 8).toUpperCase();
+    }
 
     // DOM元素
     const elements = {
+      roomId: document.getElementById('room-id'),
+      joinRoom: document.getElementById('join-room'),
+      copyRoomId: document.getElementById('copy-room-id'),
+      syncStatus: document.getElementById('sync-status'),
       participantName: document.getElementById('participant-name'),
       addParticipant: document.getElementById('add-participant'),
       participantsContainer: document.getElementById('participants-container'),
@@ -307,26 +364,22 @@
 
     // 初始化
     function init() {
-      // 从本地存储加载数据
-      loadFromStorage();
-      
-      // 渲染初始数据
-      renderParticipants();
-      renderHistory();
-      updateButtonsState();
-      
       // 设置事件监听
       setupEventListeners();
       
-      // 模拟在线用户计数
-      updateOnlineCount();
-      
-      // 监听存储变化，实现多窗口同步
-      window.addEventListener('storage', handleStorageChange);
+      // 尝试从URL加载房间ID
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('room')) {
+        elements.roomId.value = urlParams.get('room');
+      }
     }
 
     // 事件监听设置
     function setupEventListeners() {
+      // 房间相关
+      elements.joinRoom.addEventListener('click', joinOrCreateRoom);
+      elements.copyRoomId.addEventListener('click', copyRoomIdToClipboard);
+      
       // 添加参与者
       elements.addParticipant.addEventListener('click', addParticipant);
       
@@ -356,8 +409,157 @@
       elements.themeToggle.addEventListener('click', toggleTheme);
     }
 
+    // 加入或创建房间
+    function joinOrCreateRoom() {
+      let roomId = elements.roomId.value.trim();
+      
+      // 如果没有输入房间ID，自动生成一个
+      if (!roomId) {
+        roomId = generateRoomId();
+        elements.roomId.value = roomId;
+      }
+      
+      // 保存房间ID
+      state.roomId = roomId;
+      
+      // 更新UI
+      elements.copyRoomId.disabled = false;
+      updateSyncStatus('connecting', '正在连接到房间...');
+      
+      // 更新URL，方便分享
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', roomId);
+      window.history.pushState({}, '', url);
+      
+      // 连接到Firebase实时数据库
+      connectToRoom(roomId);
+    }
+
+    // 连接到房间
+    function connectToRoom(roomId) {
+      // 房间数据的数据库路径
+      const roomRef = database.ref(`rooms/${roomId}`);
+      
+      // 监听房间数据变化
+      roomRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        
+        // 如果房间不存在，初始化数据
+        if (!data) {
+          roomRef.set({
+            participants: [],
+            history: [],
+            onlineUsers: {}
+          });
+          return;
+        }
+        
+        // 更新本地状态
+        state.participants = data.participants || [];
+        state.history = data.history || [];
+        
+        // 更新UI
+        renderParticipants();
+        renderHistory();
+        updateButtonsState();
+        
+        // 标记为已连接
+        if (!state.isConnected) {
+          state.isConnected = true;
+          updateSyncStatus('connected', '已连接到房间，数据实时同步中');
+          
+          // 启用交互控件
+          elements.participantName.disabled = false;
+          elements.addParticipant.disabled = false;
+          elements.importNames.disabled = false;
+        }
+        
+        // 更新在线用户计数
+        updateOnlineUsers(roomRef);
+      });
+      
+      // 监听连接状态
+      database.ref('.info/connected').on('value', (snapshot) => {
+        if (snapshot.val() === false) {
+          return;
+        }
+        
+        // 记录当前用户在线状态
+        const userRef = roomRef.child(`onlineUsers/${state.userId}`);
+        
+        // 当用户断开连接时（关闭页面等），自动移除在线状态
+        userRef.onDisconnect().remove();
+        
+        // 设置用户在线
+        userRef.set(true);
+      });
+      
+      // 监听在线用户变化
+      roomRef.child('onlineUsers').on('value', (snapshot) => {
+        const onlineUsers = snapshot.val() || {};
+        const userCount = Object.keys(onlineUsers).length;
+        elements.userCount.textContent = userCount;
+      });
+      
+      // 保存房间引用，用于后续数据更新
+      state.roomRef = roomRef;
+    }
+
+    // 更新在线用户
+    function updateOnlineUsers(roomRef) {
+      // 标记当前用户在线
+      roomRef.child(`onlineUsers/${state.userId}`).set(true);
+    }
+
+    // 更新同步状态
+    function updateSyncStatus(status, message) {
+      const icon = elements.syncStatus.querySelector('i');
+      const text = elements.syncStatus.querySelector('span');
+      
+      // 移除所有状态类
+      elements.syncStatus.classList.remove('text-green-600', 'text-yellow-600', 'text-red-600');
+      icon.className = '';
+      
+      // 设置状态
+      switch(status) {
+        case 'connected':
+          elements.syncStatus.classList.add('text-green-600');
+          icon.className = 'fa fa-check-circle mr-1';
+          break;
+        case 'connecting':
+          elements.syncStatus.classList.add('text-yellow-600');
+          icon.className = 'fa fa-circle-o-notch fa-spin mr-1';
+          break;
+        case 'error':
+          elements.syncStatus.classList.add('text-red-600');
+          icon.className = 'fa fa-exclamation-circle mr-1';
+          break;
+      }
+      
+      text.textContent = message;
+    }
+
+    // 复制房间ID到剪贴板
+    function copyRoomIdToClipboard() {
+      if (!state.roomId) return;
+      
+      // 复制房间ID
+      elements.roomId.select();
+      document.execCommand('copy');
+      
+      // 显示提示
+      const originalText = elements.copyRoomId.innerHTML;
+      elements.copyRoomId.innerHTML = '<i class="fa fa-check mr-1"></i> 已复制';
+      
+      setTimeout(() => {
+        elements.copyRoomId.innerHTML = originalText;
+      }, 2000);
+    }
+
     // 添加参与者
     function addParticipant() {
+      if (!state.isConnected) return;
+      
       const name = elements.participantName.value.trim();
       
       if (!name) {
@@ -375,12 +577,15 @@
         return;
       }
       
-      state.participants.push(name);
-      elements.participantName.value = '';
+      // 更新本地数组
+      const newParticipants = [...state.participants, name];
       
-      saveToStorage();
-      renderParticipants();
-      updateButtonsState();
+      // 更新数据库
+      state.roomRef.update({
+        participants: newParticipants
+      });
+      
+      elements.participantName.value = '';
       showToast(`已添加: ${name}`, 'success');
     }
 
@@ -420,11 +625,17 @@
       document.querySelectorAll('.delete-participant').forEach(button => {
         button.addEventListener('click', (e) => {
           const index = parseInt(e.currentTarget.dataset.index);
-          const deletedName = state.participants.splice(index, 1)[0];
+          const deletedName = state.participants[index];
           
-          saveToStorage();
-          renderParticipants();
-          updateButtonsState();
+          // 创建新数组（不修改原数组）
+          const newParticipants = [...state.participants];
+          newParticipants.splice(index, 1);
+          
+          // 更新数据库
+          state.roomRef.update({
+            participants: newParticipants
+          });
+          
           showToast(`已移除: ${deletedName}`, 'info');
         });
       });
@@ -432,17 +643,22 @@
 
     // 清空参与者
     function clearParticipants() {
+      if (!state.isConnected) return;
+      
       if (confirm('确定要清空所有参与者吗？')) {
-        state.participants = [];
-        saveToStorage();
-        renderParticipants();
-        updateButtonsState();
+        // 更新数据库
+        state.roomRef.update({
+          participants: []
+        });
+        
         showToast('已清空所有参与者', 'info');
       }
     }
 
     // 开始抽签
     function startDraw() {
+      if (!state.isConnected) return;
+      
       if (state.participants.length < 1) {
         showToast('请先添加参与者', 'warning');
         return;
@@ -481,7 +697,7 @@
         if (step >= totalSteps) {
           clearInterval(drawInterval);
           state.isDrawing = false;
-          state.currentWinner = randomParticipant;
+          const winner = randomParticipant;
           
           // 显示最终结果
           drawResult.innerHTML = `
@@ -489,41 +705,36 @@
               <div class="inline-block p-2 bg-accent/10 rounded-full mb-2">
                 <i class="fa fa-trophy text-3xl text-accent"></i>
               </div>
-              <div class="text-3xl font-bold text-gray-800 animate-bounce-slow">${randomParticipant}</div>
+              <div class="text-3xl font-bold text-gray-800 animate-bounce-slow">${winner}</div>
               <div class="text-gray-500 mt-1">恭喜中奖！</div>
             </div>
           `;
           
-          // 更新历史记录
-          addToHistory(randomParticipant);
+          // 添加到历史记录
+          const now = new Date();
+          const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+          
+          const newHistory = [
+            {
+              winner,
+              time: timeStr,
+              timestamp: now.getTime()
+            },
+            ...state.history
+          ].slice(0, 20); // 只保留最近20条
+          
+          // 更新数据库
+          state.roomRef.update({
+            history: newHistory
+          });
           
           // 恢复按钮状态
           elements.startDraw.disabled = false;
           elements.startDraw.innerHTML = '<i class="fa fa-play mr-2"></i> 开始抽签';
           
-          showToast(`恭喜 ${randomParticipant} 中奖！`, 'success');
+          showToast(`恭喜 ${winner} 中奖！`, 'success');
         }
       }, interval);
-    }
-
-    // 添加到历史记录
-    function addToHistory(winner) {
-      const now = new Date();
-      const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
-      
-      state.history.unshift({
-        winner,
-        time: timeStr,
-        timestamp: now.getTime()
-      });
-      
-      // 只保留最近20条记录
-      if (state.history.length > 20) {
-        state.history = state.history.slice(0, 20);
-      }
-      
-      saveToStorage();
-      renderHistory();
     }
 
     // 渲染历史记录
@@ -560,16 +771,22 @@
 
     // 清空历史记录
     function clearHistory() {
+      if (!state.isConnected) return;
+      
       if (confirm('确定要清空所有抽签历史吗？')) {
-        state.history = [];
-        saveToStorage();
-        renderHistory();
+        // 更新数据库
+        state.roomRef.update({
+          history: []
+        });
+        
         showToast('已清空抽签历史', 'info');
       }
     }
 
     // 打开批量导入模态框
     function openImportModal() {
+      if (!state.isConnected) return;
+      
       elements.importModal.classList.remove('hidden');
       // 触发动画
       setTimeout(() => {
@@ -591,6 +808,8 @@
 
     // 导入参与者
     function importParticipants() {
+      if (!state.isConnected) return;
+      
       const text = elements.batchNames.value.trim();
       
       if (!text) {
@@ -626,11 +845,13 @@
       }
       
       // 添加新参与者
-      state.participants.push(...newNames);
+      const updatedParticipants = [...state.participants, ...newNames];
       
-      saveToStorage();
-      renderParticipants();
-      updateButtonsState();
+      // 更新数据库
+      state.roomRef.update({
+        participants: updatedParticipants
+      });
+      
       showToast(`已成功导入 ${newNames.length} 名参与者`, 'success');
       
       closeImportModal();
@@ -640,50 +861,7 @@
     function updateButtonsState() {
       const hasParticipants = state.participants.length > 0;
       elements.clearParticipants.disabled = !hasParticipants;
-      elements.startDraw.disabled = !hasParticipants || state.isDrawing;
-    }
-
-    // 保存数据到本地存储
-    function saveToStorage() {
-      const data = {
-        participants: state.participants,
-        history: state.history
-      };
-      
-      localStorage.setItem(state.syncKey, JSON.stringify(data));
-    }
-
-    // 从本地存储加载数据
-    function loadFromStorage() {
-      const dataStr = localStorage.getItem(state.syncKey);
-      
-      if (dataStr) {
-        try {
-          const data = JSON.parse(dataStr);
-          if (data.participants) state.participants = data.participants;
-          if (data.history) state.history = data.history;
-        } catch (e) {
-          console.error('Failed to parse data from storage', e);
-          // 清除损坏的数据
-          localStorage.removeItem(state.syncKey);
-        }
-      }
-    }
-
-    // 处理存储变化事件，实现多窗口同步
-    function handleStorageChange(e) {
-      if (e.key !== state.syncKey) return;
-      
-      loadFromStorage();
-      renderParticipants();
-      renderHistory();
-      updateButtonsState();
-      
-      // 如果有新的抽签结果，显示提示
-      if (state.history.length > 0) {
-        const lastWinner = state.history[0].winner;
-        showToast(`最新抽签结果: ${lastWinner}`, 'info');
-      }
+      elements.startDraw.disabled = !hasParticipants || state.isDrawing || !state.isConnected;
     }
 
     // 显示提示消息
@@ -741,16 +919,6 @@
           toast.remove();
         }, 300);
       }, 3000);
-    }
-
-    // 模拟在线用户计数
-    function updateOnlineCount() {
-      // 生成1-10的随机数模拟在线用户数
-      const count = Math.floor(Math.random() * 10) + 1;
-      elements.userCount.textContent = count;
-      
-      // 每30秒更新一次
-      setTimeout(updateOnlineCount, 30000);
     }
 
     // 切换主题
